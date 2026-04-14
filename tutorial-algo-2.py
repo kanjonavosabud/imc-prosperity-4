@@ -6,14 +6,16 @@ import json
 
 POSITION_LIMIT = {"EMERALDS": 80, "TOMATOES": 80}
 
-PRODUCT        = "EMERALDS" # only trading emeralds
-FAIR_VALUE_EMERALDS = 10_000
-HALF_SPREAD    = 5
+EMERALDS_FAIR_VALUE = 10_000
+EMERALDS_HALF_SPREAD = 7
+EMERALDS_INV_SKEW = 0        # max ticks of inventory skew on quote centre
 
-TOMATOES_WINDOW = 100
+
+TOMATOES_WINDOW = 150
 TOMATOES_MAKE_EDGE = 5
 TOMATOES_TAKE_EDGE = 2
 TOMATOES_Z_SKEW = 0.5  # shift quote centre by -Z_SKEW * zscore (fade deviations softly)
+TOMATOES_INV_SKEW = 0         # max ticks of inventory skew on quote centre
 
 def best_bid_ask(od: OrderDepth):
     best_bid = max(od.buy_orders.keys()) if od.buy_orders else None
@@ -56,7 +58,7 @@ class Trader:
     def _trade_emeralds(self, od: OrderDepth, pos: int, limit: int):
         orders: List[Order] = []
 
-        acceptable_price = FAIR_VALUE_EMERALDS
+        acceptable_price = EMERALDS_FAIR_VALUE
 
         # Available capacity in each direction
         buy_capacity  = limit - pos   # how many more we can buy
@@ -80,9 +82,9 @@ class Trader:
             sell_capacity -= fill_qty
 
         # Quote skew based on current inventory
-        skew = -int(round((pos / limit) * 2))
-        our_bid = acceptable_price - HALF_SPREAD + skew
-        our_ask = acceptable_price + HALF_SPREAD + skew
+        skew = -int(round((pos / limit) * EMERALDS_INV_SKEW))
+        our_bid = acceptable_price - EMERALDS_HALF_SPREAD + skew
+        our_ask = acceptable_price + EMERALDS_HALF_SPREAD + skew
 
         # Safety check: never quote bid >= ask
         if our_bid >= our_ask:
@@ -136,9 +138,11 @@ class Trader:
 
         # Inventory skew + soft z-score fade: centre shifts against position
         # and slightly against current deviation from rolling fair.
-        inv_skew = -pos / limit  # in [-1, 1]
+        inv_ratio = pos / limit  # in [-1, 1]
+        inv_skew = -inv_ratio * TOMATOES_INV_SKEW
         z_skew = -TOMATOES_Z_SKEW * zscore
         centre = fair + inv_skew + z_skew
+
         make_bid = int(round(centre - TOMATOES_MAKE_EDGE))
         make_ask = int(round(centre + TOMATOES_MAKE_EDGE))
 
@@ -148,10 +152,22 @@ class Trader:
         if make_ask <= best_bid:
             make_ask = best_bid + 1
 
+        # Safety check: never post a bid above fair or an ask below fair (adverse fill risk)
+        make_bid = min(make_bid, fair - 1)
+        make_ask = max(make_ask, fair + 1)
+
+        # # Volume taper: reduce lot size as we approach the position limit
+        # abs_ratio = abs(inv_ratio)
+        # taper_scale = max(0.0, 1.0 - abs_ratio ** 0.5)
+        # base_vol = 7
+        # tapered_vol = max(1, int(base_vol * taper_scale))
+
         if buy_cap > 0:
-            orders.append(Order("TOMATOES", make_bid, buy_cap))
+            qty = buy_cap
+            orders.append(Order("TOMATOES", make_bid, qty))
         if sell_cap > 0:
-            orders.append(Order("TOMATOES", make_ask, -sell_cap))
+            qty = sell_cap
+            orders.append(Order("TOMATOES", make_ask, -qty))
 
         return orders, history
 

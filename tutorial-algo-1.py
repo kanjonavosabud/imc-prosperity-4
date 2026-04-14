@@ -5,7 +5,8 @@ import string
 PRODUCT        = "EMERALDS" # only trading emeralds
 FAIR_VALUE     = 10_000
 POSITION_LIMIT = 80
-HALF_SPREAD    = 5
+HALF_SPREAD    = 7
+INV_SKEW       = 0
 
 
 class Trader:
@@ -61,7 +62,7 @@ class Trader:
                     sell_capacity -= fill_qty
 
             # Quote skew based on current inventory
-            skew = -int(round((position / POSITION_LIMIT) * 2))
+            skew = -int(round((position / POSITION_LIMIT) * INV_SKEW))
             our_bid = acceptable_price - HALF_SPREAD + skew
             our_ask = acceptable_price + HALF_SPREAD + skew
 
