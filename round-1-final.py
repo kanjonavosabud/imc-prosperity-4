@@ -21,23 +21,19 @@ ACO_L2_SIZE      = 15      # 2nd-layer quote size per side
 ACO_WALL_SIZE    = 0       # 3rd-layer: quote 1 inside detected wall
 ACO_SKEW         = 0.10    # fair shifts by  -SKEW * position
 
-# --- INTARIAN_PEPPER_ROOT (linear ramp) ----------------------
+# --- INTARIAN_PEPPER_ROOT (parameters for new algo) ----------
 IPR              = "INTARIAN_PEPPER_ROOT"
 IPR_LIMIT        = 80
 
-IPR_SLOPE        = 0.001   # expected price increase per ts unit
-IPR_CORR_ALPHA   = 0.20    # EWMA smoothing for residual correction
-IPR_TAKE_EDGE    = 1       # min ticks of edge to aggress
-IPR_QUOTE_OFFSET = 1       # primary quote distance from fair
-IPR_QUOTE_SIZE   = 28      # primary quote size per side
-IPR_L2_OFFSET    = 4       # 2nd-layer distance
-IPR_L2_SIZE      = 16      # 2nd-layer size per side
-IPR_SKEW         = 0.25    # inventory-flattening coefficient
+IPR_TREND_SPAN   = 16      # ewma span for trend signal
+IPR_QUOTE_OFFSET = 2       # quote distance from fair
+IPR_QUOTE_SIZE   = 28      # quote size per side
+IPR_L2_OFFSET    = 6       # 2nd-layer quote distance
+IPR_L2_SIZE      = 18      # 2nd-layer quote size per side
+IPR_SKEW         = 0.20    # inventory flattening coefficient
 
-# --- ADAPTIVE TARGET PARAMS ----------------------------------
-IPR_MAX_TARGET   = 65      # max long inventory when trend is strong
-IPR_SLOPE_WINDOW = 30      # ticks of mid history to estimate slope
-IPR_SLOPE_THRESH = 0.0003  # below this slope, target trends toward 0
+IPR_IDLE_EDGE    = 1       # minimum edge to sweep
+IPR_IDLE_FLAT    = 0.0     # target position when untrended
 
 
 # ============================================================
@@ -178,41 +174,7 @@ class Trader:
 
         return orders
 
-    # ---- IPR slope estimation --------------------------------
-
-    def _estimate_slope(self, data: dict) -> float:
-        history = data.get("ipr_mids", [])
-        if len(history) < 10:
-            return IPR_SLOPE
-
-        recent = history[-IPR_SLOPE_WINDOW:]
-        n = len(recent)
-        if n < 10:
-            return IPR_SLOPE
-
-        # Linear regression: slope of mid vs tick index
-        # Each tick step = 100 ts
-        x_mean = (n - 1) / 2.0
-        y_mean = sum(recent) / n
-        num = sum((i - x_mean) * (y - y_mean) for i, y in enumerate(recent))
-        den = sum((i - x_mean) ** 2 for i in range(n))
-        if den == 0:
-            return IPR_SLOPE
-
-        slope_per_tick = num / den
-        slope_per_ts = slope_per_tick / 100.0
-        return slope_per_ts
-
-    def _adaptive_target(self, data: dict) -> float:
-        corr = data.get("ipr_corr", 0.0)
-        if corr > -10:
-            return float(IPR_MAX_TARGET)
-        elif corr < -20:
-            return 0.0
-        else:
-            return IPR_MAX_TARGET * (20 + corr) / 10.0
-
-    # ---- IPR strategy ----------------------------------------
+    # ---- IPR new strategy (momentum/ewma-trend-following) ----
 
     def _trade_ipr(self, state: TradingState, data: dict) -> List[Order]:
         od  = state.order_depths.get(IPR, OrderDepth())
@@ -220,47 +182,44 @@ class Trader:
         ts  = state.timestamp
         mid = self._mid(od)
 
-        # --- day offset detection ------------------------------
-        if "ipr_doff" not in data:
-            if mid is not None:
-                data["ipr_doff"] = self._detect_day_offset(mid)
-            else:
-                data["ipr_doff"] = 3000
-
-        # --- track mid history for slope estimation ------------
-        if "ipr_mids" not in data:
-            data["ipr_mids"] = []
+        # --- compute ewma of mid to extract trend --------------
+        if "ipr_ewma" not in data:  # slow signal
+            data["ipr_ewma"] = mid if mid is not None else 10000.0
         if mid is not None:
-            data["ipr_mids"].append(mid)
-            max_hist = IPR_SLOPE_WINDOW * 2
-            if len(data["ipr_mids"]) > max_hist:
-                data["ipr_mids"] = data["ipr_mids"][-max_hist:]
+            alpha = 2.0 / (IPR_TREND_SPAN + 1)
+            prev = data["ipr_ewma"]
+            data["ipr_ewma"] = prev if mid is None else alpha * mid + (1 - alpha) * prev
 
-        # --- estimate slope and adapt target -------------------
-        inv_target = self._adaptive_target(data)
-        data["ipr_target"] = inv_target
+        ewma = data["ipr_ewma"]
 
-        # --- analytical fair value + correction ----------------
-        base_fair = 10000 + data["ipr_doff"] + IPR_SLOPE * ts
+        # --- compute a linear fair using latest mid/ewma/trend ---
+        trend = 0.0 if mid is None else mid - ewma
+        base_fair = ewma + trend * 0.85  # amplify trend
+        base_fair = max(base_fair, 9000)  # no silly prices
 
-        corr = data.get("ipr_corr", 0.0)
-        if mid is not None:
-            residual = mid - base_fair
-            corr = IPR_CORR_ALPHA * residual + (1 - IPR_CORR_ALPHA) * corr
-            data["ipr_corr"] = corr
+        # --- simple trend-following position targeting ----------
+        # If trend is positive, want to bias long, else short, else flat
+        if trend > 1:
+            target_pos = IPR_LIMIT
+        elif trend < -1:
+            target_pos = -IPR_LIMIT
+        else:
+            target_pos = IPR_IDLE_FLAT
 
-        fair_raw = base_fair + corr
+        # Risk control: don't overreach inventory limits
+        target_pos = max(-IPR_LIMIT, min(IPR_LIMIT, target_pos))
 
-        # --- inventory-target skew -----------------------------
-        adj_pos = pos - inv_target
-        fair    = fair_raw - IPR_SKEW * adj_pos
+        # --- Skew fair for inventory flattening -----------------
+        adj_pos = pos - target_pos
+        fair = base_fair - IPR_SKEW * adj_pos
 
+        # --- Build orders, more aggressive sweeping in strong trend
+        edge = IPR_IDLE_EDGE
         orders, _, _ = self._build_orders(
             IPR, od, pos, fair, IPR_LIMIT,
-            IPR_TAKE_EDGE, IPR_QUOTE_OFFSET, IPR_QUOTE_SIZE,
-            IPR_L2_OFFSET, IPR_L2_SIZE,
+            edge, IPR_QUOTE_OFFSET, IPR_QUOTE_SIZE,
+            IPR_L2_OFFSET, IPR_L2_SIZE
         )
-
         return orders
 
     # ---- main entry point ------------------------------------
