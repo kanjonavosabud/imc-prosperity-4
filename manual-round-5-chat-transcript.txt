@@ -1,0 +1,537 @@
+================================================================================
+IMC PROSPERITY 4 — ROUND 5 MANUAL CHAT TRANSCRIPT
+Date: 2026-04-28 / 2026-04-29
+Project: /Users/kanjonavosabud/Documents/kj-projects/imc-prosperity-4
+================================================================================
+
+THE CHALLENGE
+================================================================================
+Final round of IMC Prosperity 4 — Ignith exchange, one-day-only news trading.
+News source: "Ashflow Alpha". Hold portfolio overnight. Budget: $1,000,000.
+
+Fee formula: fee = (volume_pct/100)^2 * budget
+  -> with v as fraction in [0,1]: fee = v^2 * B
+  -> quadratic in volume
+
+Constraints:
+  - Sum of |volume_pct| <= 100% of budget
+  - Distributing < 100% is allowed
+  - Unused budget expires worthless
+  - "Used budget" (= fees) subtracted from trade PnL
+
+Net PnL formula: PnL_i = v_i * B * r_i - v_i^2 * B
+  where v_i = allocation fraction, r_i = expected return on traded volume.
+
+9 ASSETS (Ignith-themed):
+  Obsidian Cutlery, Pyroflex Cells, Thermalite Core, Lava Cake, Magma Ink,
+  Scoria Paste, Ashes of the Phoenix, Volcanic Incense, Sulfur Reactor
+
+
+================================================================================
+PART 1: NEWS ANALYSIS & INITIAL DIRECTION PREDICTIONS
+================================================================================
+
+The Ashflow Alpha news feed contained 9 articles, one per asset:
+
+1. MAGMA INK (BUY)
+   "Crowds line up for limited-edition Lava Fountain Pen featuring Magma Ink"
+   - Sellout product, 6+ hour queues, "hot drop"
+   - Stip x Splatter merger context
+
+2. OBSIDIAN CUTLERY (initially SELL — later REVISED to BUY, see Part 11)
+   "Manufacturing halted after obsidian cutlery cuts through its own assembly line"
+   - Level-1 contamination protocols, evacuation
+   - "Implications for other manufacturing facilities"
+
+3. PYROFLEX CELLS (SELL)
+   "Ignith Tax Authority faces industry pressure after abrupt end to Pyroflex
+    Cell Tax Cut"
+   - 50% PCTC abolished, levy effectively doubles
+   - Article: "disrupt consumer upgrade cycles and slow new purchases"
+
+4. THERMALITE CORE (BUY)
+   "Quarterly forecast report shows surge in Thermalite-powered smart home devices"
+   - Active users 1.42M -> 3.89M (+174%)
+   - 16h 42m daily usage
+   - "Very strong next quarter"
+
+5. ASHES OF THE PHOENIX (SELL)
+   "Resurfaced video of Ashes of the Phoenix origin shock public"
+   - Birds being burned for cosmetic ashes (PR disaster)
+   - Company rebuttal: "birds are immortal" (comically bad)
+
+6. SCORIA PASTE (BUY — later SKIPPED)
+   "Lava D. Ray says 'Glory days are ahead' for Ignith economy, urges
+    stockpiling of Scoria Paste"
+   - Self-described "market medium" influencer pump
+   - Lowest-credibility source
+
+7. LAVA CAKE (SELL)
+   "Traces of actual lava found in Lava Cakes, prompting health review"
+   - Actual lava confirmed in product
+   - Lawsuits piling, vendors returning stock with lawyer letters
+   - Health authority halt of sales
+
+8. VOLCANIC INCENSE (BUY — later SKIPPED)
+   "Sudden surge in Volcanic Incense as Whiff Nostralico calls for people to
+    follow his lead"
+   - Already rallying (momentum partially priced in)
+   - Influencer-driven
+
+9. SULFUR REACTOR (BUY)
+   "Index Committee confirms Sulfur Ltd. for Elemental Index 118"
+   - Mechanical buying from index funds expected
+   - "Benchmark product" framing
+
+INITIAL DIRECTIONAL CALL SUMMARY:
+  BUY:  Thermalite Core, Sulfur Reactor, Magma Ink, Volcanic Incense, Scoria Paste
+  SELL: Lava Cake, Ashes of the Phoenix, Pyroflex Cells, Obsidian Cutlery
+
+
+================================================================================
+PART 2: OPTIMAL PORTFOLIO FRAMEWORK
+================================================================================
+
+Per-asset optimization (ignoring budget constraint):
+  PnL_i = v_i * B * r_i - v_i^2 * B
+  d/dv_i = B * r_i - 2 * v_i * B = 0
+  => v_i* = r_i / 2  (UNCONSTRAINED OPTIMUM)
+
+  At v_i*: marginal next dollar earns 0
+  Past v_i*: every additional dollar LOSES money in expectation
+
+If sum(|v_i*|) > 1, apply Lagrangian:
+  v_i = max(0, (|r_i| - lambda) / 2)
+  Choose lambda so sum(v_i) = 1
+
+For our format (B=$1M), optimal pct = 50r (where r is decimal return).
+
+
+================================================================================
+PART 3: WHY 73% BEATS 100% — THE QUADRATIC FEE TRAP
+================================================================================
+
+The fee is convex (parabolic), the gain is linear. There is a crossover where
+they cancel — at v = r/2. Past that, the next dollar of trade ACTIVELY LOSES
+money in expectation.
+
+CONCRETE EXAMPLE — Thermalite at r=30%:
+  Allocation v |  Gross gain  |    Fee    |   Net PnL
+       10%     |   $30,000    |  $10,000  |   +$20,000
+       15% (*) |   $45,000    |  $22,500  |   +$22,500   <- max
+       20%     |   $60,000    |  $40,000  |   +$20,000
+       25%     |   $75,000    |  $62,500  |   +$12,500
+       30% (=r)|   $90,000    |  $90,000  |       $0     (break-even)
+       40%     |  $120,000    | $160,000  |   -$40,000
+       50%     |  $150,000    | $250,000  |  -$100,000
+
+KEY INSIGHTS:
+- Forcing Thermalite from optimal 15% up to 50% turns +$22.5k into -$100k
+- Unused budget = 0 (zero opportunity cost)
+- Over-allocated budget < 0 (negative marginal PnL past r/2)
+- So unused budget BEATS over-allocated budget
+
+When 100% is right:
+- Only when sum(r_i/2) > 1 across all assets
+- For N-asset equal portfolio: avg r >= 2/N
+- N=1: need r=200%
+- N=5: need avg r=40%
+- N=9: need avg r=22%
+- N=20: need avg r=10%
+
+
+================================================================================
+PART 4: NOTEBOOK PLOTS (manual-round-5.ipynb)
+================================================================================
+
+PLOT 1: PnL vs volume fraction for r=30% (single asset)
+  Shows the parabolic shape, optimum at v*=15%, breakeven at v=30%, loss zone
+
+PLOT 2: PnL curves for r from 2% to 50% with peak locus overlaid
+  Locus: PnL* = B * v^2 (the envelope of all peaks)
+  Color-coded by r value
+
+PLOT 3: Peak locus extended to wide return range
+  Shows where v=1 becomes optimal: r=200%
+  Forced-100%-volume line: PnL = B*(r-1) — breaks even at r=100%
+  Reference dots every 25% of return
+
+
+================================================================================
+PART 5: r=100% MEANING (cleared up confusion)
+================================================================================
+
+r = price return on volume traded (asset's actual price move)
+
+At r=100% (asset doubled):
+  - v=1.0 forced: gross +$1M, fee $1M, NET = $0 (break-even)
+  - v=0.5 optimal: gross +$500k, fee $250k, NET = +$250k
+
+So r=100% does NOT mean we double our money on a forced 100% allocation —
+it means we BREAK EVEN. The fee structure eats the entire gain.
+
+The asset literally doubled; you just left it all on the table by oversizing.
+
+
+================================================================================
+PART 6: INITIAL RETURN ESTIMATES (v1)
+================================================================================
+
+Estimation framework (3 components, additive):
+  1. Archetype prior — typical magnitude for news category
+  2. Concreteness modifier — bumps for hard numbers / multi-pronged shocks
+  3. Already-priced-in haircut — shrinks for already-rallying signals
+
+v1 ESTIMATES:
+  Asset                | r_hat  | v* = |r|/2 | Direction
+  Thermalite Core      | +30%   |   15%       | BUY
+  Lava Cake            | -25%   |   12%       | SELL
+  Ashes of the Phoenix | -20%   |   10%       | SELL
+  Magma Ink            | +15%   |    7.5%     | BUY
+  Pyroflex Cells       | -15%   |    7.5%     | SELL
+  Sulfur Reactor       | +12%   |    6%       | BUY
+  Obsidian Cutlery     | -12%   |    6%       | SELL
+  Volcanic Incense     | +10%   |    5%       | BUY
+  Scoria Paste         | +8%    |    4%       | BUY
+                              Total ~73% utilization
+
+
+================================================================================
+PART 7: PROSPERITY 3 ROUND 5 ACTUAL RESULTS (calibration data #1)
+================================================================================
+
+User shared a screenshot from a P3 team's writeup:
+
+Product       | Expected | Actual    | Profit  | Optimal
+--------------|----------|-----------|---------|--------
+Haystacks     |   12%    |  -0.48%   | -3,240  | 0
+Ranch Sauce   |   10%    |  -0.72%   | -2,208  | 0
+Cacti Needle  |  -30%    | -41.20%   | 32,160  | 35,360
+Solar Panels  |  -30%    |  -8.90%   | -6,600  | 1,640
+Red Flags     |    5%    |  50.90%   |  9,700  | 53,970
+VR Monocle    |   30%    |  22.40%   |  9,600  | 10,440
+Quantum Coffee|  -50%    | -66.79%   | 87,339  | 92,932
+Moonshine     |    0%    |   3.00%   |      0  | 180
+Striped shirts|    0%    |   0.21%   |      0  | 0
+SUM           |          |           |126,751  |194,522
+
+Captured ~65% of optimal. Confessed mistakes:
+- Pattern-matched Haystacks/Ranch Sauce/Solar Panels to wrong precedents
+- "Massively underestimated Red Flags because we wanted to hedge"
+
+ARCHETYPE LESSONS:
+- Concrete catastrophes UNDERSHOOT (-67% vs -50% est)
+- Index/mechanical signals land close (+22% vs +30% est)
+- Soft Sleddit/influencer hype FLATLINES or reverses
+- Limited-edition / scarcity can EXPLODE (+51% vs +5% est)
+- "No news" assets stay near 0
+
+
+================================================================================
+PART 8: v2 ESTIMATES (after P3 calibration)
+================================================================================
+
+Three rules emerged:
+  1. Bold on hard signals (concrete crises undershoot)
+  2. Zero soft signals (influencer pumps flatline, fees burn budget)
+  3. Size index inclusions honestly
+
+v2 ESTIMATES (changes from v1):
+  Asset                | v1     | v2     | Change rationale
+  Thermalite Core      | +30%   | +40%   | concrete bull undershoot
+  Magma Ink            | +15%   | +40%   | Red Flags scarcity precedent
+  Lava Cake            | -25%   | -45%   | Quantum Coffee precedent
+  Ashes of the Phoenix | -20%   | -35%   | Cacti Needle precedent
+  Pyroflex Cells       | -15%   | -18%   | concrete demand-tax shock
+  Obsidian Cutlery     | -12%   | -18%   | concrete halt + spillover
+  Sulfur Reactor       | +12%   | +12%   | unchanged (mechanical)
+  Volcanic Incense     | +10%   |  0%    | SKIP (Sleddit pattern)
+  Scoria Paste         | +8%    |  0%    | SKIP (Ranch Sauce pattern)
+
+Sum of |v*| jumped from 73% to ~93%.
+
+
+================================================================================
+PART 9: DEEPER WEB RESEARCH ON PAST COMPETITIONS
+================================================================================
+
+PROSPERITY 2 ROUND 5 ACTUAL RETURNS (gabsens reverse-engineered):
+  Moustache Serum     | ----    | -81.6%   | Health scandal w/ named harm
+  Electric Blankets   | ---     | -32.9%   | Operational catastrophe
+  Sleds               | --      | -28.3%   | Scandal/supply break
+  PS6                 | +++     | +30.1%   | Blockbuster launch
+  Ice Sculptures      | ++      | +19.6%   | Adoption story
+  Icicle Earrings     | ++      | +12.4%   | Adoption story
+  Refrigerators       | +       |  +2.1%   | Soft positive
+  Lamps               | +       |  ~0%     | Soft / vague
+  Chocolate           | -       |  ~0%     | Soft negative
+
+KEY ARCHETYPE PATTERNS (across P2 + P3):
+  RELIABLE BIG MOVERS (size aggressively, 20%+):
+    - Health/regulatory shock w/ named harm: -50% to -80%
+    - Operational catastrophe / scandals: -25% to -45%
+    - Scarcity / limited-edition: +25% to +55%
+
+  MEDIUM MOVERS (~10-25%):
+    - Adoption / engagement metrics: directionally right, magnitudes overestimated
+    - Tax/cost-shock policy stories: HISTORICALLY SMALLER than they look
+      (Solar Panels -9% vs -30% est)
+
+  ALMOST-ALWAYS FAKES / FLAT (don't trade):
+    - Vague "trend" or "season ahead" calls: 0%
+    - M&A/takeover premium chatter: 0%
+    - Influencer/hype without hard catalyst: flatlines
+
+DOCUMENTED STRATEGIC ERRORS:
+  1. Pattern-matching to prior years on soft signals burns money
+  2. Hedging against contrarian-take on scarcity stories kills PnL
+  3. "No expected move" treated as zero rather than hedge
+  4. Quadratic fee rewards concentration (don't spread thinly)
+  5. Player-sentiment can amplify moves 5-10x past narrative
+
+
+================================================================================
+PART 10: v3 ESTIMATES (after P2+P3 archetype calibration)
+================================================================================
+
+v3 ESTIMATES:
+  Asset                | v2     | v3     | Reasoning
+  Lava Cake            | -45%   | -65%   | Moustache Serum (-82%) / Quantum Coffee (-67%) precedent
+  Magma Ink            | +40%   | +45%   | Red Flags +51% precedent (could be higher)
+  Thermalite Core      | +40%   | +30%   | VR Monocle +22% on +30% est — don't overshoot adoption
+  Ashes of the Phoenix | -35%   | -40%   | Cacti Needle -41% precedent
+  Obsidian Cutlery     | -18%   | -30%   | Electric Blankets -33% / Sleds -28% precedent
+  Pyroflex Cells       | -18%   | -10%   | Solar Panels -9% precedent — tax shocks undershoot
+  Sulfur Reactor       | +12%   | +12%   | unchanged (mechanical)
+  Volcanic Incense     |  0%    |  0%    | SKIP
+  Scoria Paste         |  0%    |  0%    | SKIP
+
+Σ|v*| unconstrained = 116% — BUDGET BINDS
+
+LAGRANGIAN SHRINK with λ* = 0.0457:
+  Lava Cake          SELL  -65%  v*=32.5%  v_final=30.2%  PnL=$105,103
+  Magma Ink          BUY   +45%  v*=22.5%  v_final=20.2%  PnL= $50,103
+  Ashes of Phoenix   SELL  -40%  v*=20.0%  v_final=17.7%  PnL= $39,478
+  Obsidian Cutlery   SELL  -30%  v*=15.0%  v_final=12.7%  PnL= $21,978
+  Thermalite Core    BUY   +30%  v*=15.0%  v_final=12.7%  PnL= $21,978
+  Sulfur Reactor     BUY   +12%  v*= 6.0%  v_final= 3.7%  PnL=  $3,078
+  Pyroflex Cells     SELL  -10%  v*= 5.0%  v_final= 2.7%  PnL=  $1,978
+                            TOTAL Σ|v|=100%   PnL = $243,693
+
+
+================================================================================
+PART 11: BUDGET UTILIZATION RESEARCH (top finishers used 70-90%, NOT 100%)
+================================================================================
+
+Of 5 documented teams, only ONE filled 100% — and that team finished mid-pack:
+
+Team                  | Year/Place              | Total |v|  | Approach
+gabsens               | P2, 30th on manuals     | 74% (87% optimal ex-post) | cvxpy + Mathematica
+jmerle                | P2, 9th overall         | 100%       | Heuristic, no fee model
+chrispyroberts        | P3, 7th global / 1st US | 83%        | cvxpy SCIP solver
+Frankfurt Hedgehogs   | P3, 2nd global          | ~70-90%    | Convex opt + risk haircut
+Martin Oravec         | P3                      | ~60-70%    | Conviction-tiered
+
+KEY QUOTES:
+- Frankfurt: "we tried to hedge our risk and reduced position sizes compared
+  to the optimal allocations based on our estimates of moves"
+- chrispyroberts: "tone down the allocation weights slightly for higher-risk
+  products to mitigate the chance of getting burned... Overall, we played
+  this round a bit too safe... left potential profits on the table by not
+  being aggressive enough"
+- gabsens: submitted 74%, ex-post optimal would have been 87%
+
+EMPIRICAL SWEET SPOT: 80-90% utilization.
+
+
+================================================================================
+PART 12: TWO VARIANTS (v4) — INTEGER WEIGHTS
+================================================================================
+
+Two ways to land in the empirical 80-90% zone:
+
+VARIANT A (allocation haircut): keep v3 magnitudes, apply 0.85 scale
+to Lagrangian-shrunk allocations
+  Σ|v| = 85%   Expected PnL ≈ $232,600
+
+VARIANT B (magnitude haircut): trim every r̂ by 15%, recompute v*=r/2
+  Σ|v| = 99%   Expected PnL ≈ $242,200
+
+INTEGER ALLOCATIONS:
+  Asset                | Side | r̂   | Variant A | Variant B
+  Lava Cake            | SELL | -65%|   26%     |   28%
+  Magma Ink            | BUY  | +45%|   17%     |   19%
+  Ashes of the Phoenix | SELL | -40%|   15%     |   17%
+  Obsidian Cutlery     | SELL | -30%|   11%     |   13%
+  Thermalite Core      | BUY  | +30%|   11%     |   13%
+  Sulfur Reactor       | BUY  | +12%|    3%     |    5%
+  Pyroflex Cells       | SELL | -10%|    2%     |    4%
+  Volcanic Incense     | SKIP |  0% |    0%     |    0%
+  Scoria Paste         | SKIP |  0% |    0%     |    0%
+  TOTAL                |      |     |   85%     |   99%
+
+
+================================================================================
+PART 13: TRIMMED MAGNITUDES VARIANT (15% haircut on v3)
+================================================================================
+
+Showed explicitly with trimmed numbers:
+
+  Asset                | r̂ (v3)| r̂ trimmed | Side | Submit %
+  Lava Cake            | -65%  | -55%       | SELL | 28%
+  Magma Ink            | +45%  | +38%       | BUY  | 19%
+  Ashes of the Phoenix | -40%  | -34%       | SELL | 17%
+  Obsidian Cutlery     | -30%  | -26%       | SELL | 13%
+  Thermalite Core      | +30%  | +26%       | BUY  | 13%
+  Sulfur Reactor       | +12%  | +10%       | BUY  | 5%
+  Pyroflex Cells       | -10%  |  -8%       | SELL | 4%
+  Volcanic Incense     |  0%   |  0%        | SKIP | 0%
+  Scoria Paste         |  0%   |  0%        | SKIP | 0%
+                                              TOTAL  99%
+
+Sum of |r̂_trimmed| = 197% -> Σ|v*| = 98.5% -> budget no longer binds
+Expected PnL (trimmed): ~$197,000
+Expected PnL (full v3 r̂): ~$242,200
+
+
+================================================================================
+PART 14: OBSIDIAN CUTLERY FLIP (v5)
+================================================================================
+
+USER INSIGHT:
+  "wouldn't a manufacturing mishap cause supply to drop and while demand
+   remains steady, wouldn't the price actually rise?"
+
+ANALYSIS — User was correct:
+- Prosperity assets trade as COMMODITY PRICES, not equities
+- Manufacturing halt = supply shock + sector spillover ("implications for
+  other manufacturing facilities") = bullish for price
+- Direct precedent: P3 Red Flags +51% on scarcity story
+- Pattern-matching to "operational catastrophe" was wrong because Sleds /
+  Electric Blankets were full company stories; this is a supply-shock story
+
+REVISED MAGNITUDE: +12%
+- Less than Red Flags (+51%) because no hype/limited-edition framing
+- Cutlery has substitutes (steel, ceramic) — demand moderately elastic
+- Some residual quality concern from "blades cut through their own factory"
+
+v5 SUBMISSION (with Obsidian flipped):
+  Asset                | Side | r̂   | Submit %
+  Lava Cake            | SELL | -55%|   28%
+  Magma Ink            | BUY  | +38%|   19%
+  Ashes of the Phoenix | SELL | -34%|   17%
+  Thermalite Core      | BUY  | +26%|   13%
+  Obsidian Cutlery     | BUY  | +12%|    6%   <- FLIPPED from SELL
+  Sulfur Reactor       | BUY  | +10%|    5%
+  Pyroflex Cells       | SELL |  -8%|    4%
+  Volcanic Incense     | SKIP |  0% |    0%
+  Scoria Paste         | SKIP |  0% |    0%
+  TOTAL                              92%
+  Expected PnL: ~$165,200
+
+
+================================================================================
+PART 15: FINAL SUBMITTED ORDERS
+================================================================================
+
+User submitted slightly different from v5 plan:
+
+  Asset                | Side | %  | Investment | Fee
+  Obsidian Cutlery     | BUY  | 11 |  110,000   | 12,100
+  Pyroflex Cells       | SELL |  5 |   50,000   |  2,500
+  Thermalite Core      | BUY  | 13 |  130,000   | 16,900
+  Lava Cake            | SELL | 23 |  230,000   | 52,900
+  Magma Ink            | BUY  | 19 |  190,000   | 36,100
+  Scoria Paste         | SKIP |  - |       -    |     0
+  Ashes of the Phoenix | SELL | 17 |  170,000   | 28,900
+  Volcanic Incense     | SKIP |  - |       -    |     0
+  Sulfur Reactor       | BUY  |  4 |   40,000   |  1,600
+
+  SPENDING BUDGET: 920,000 / 1,000,000  (92% used)
+  TOTAL FEE: $151,000
+
+CHANGES from v5: Obsidian 6->11 (higher conviction on supply shock),
+                 Lava Cake 28->23 (less concentration risk),
+                 Pyroflex 4->5, Sulfur 5->4
+
+EXPECTED PnL ON SUBMISSION:
+
+  Asset                | %  | r̂_trim | Gross    | Fee     | Net
+  Obsidian Cutlery     | 11 | +12%   | $13,200  | $12,100 |  $1,100
+  Pyroflex Cells       |  5 |  -8%   |  $4,000  |  $2,500 |  $1,500
+  Thermalite Core      | 13 | +26%   | $33,800  | $16,900 | $16,900
+  Lava Cake            | 23 | -55%   |$126,500  | $52,900 | $73,600
+  Magma Ink            | 19 | +38%   | $72,200  | $36,100 | $36,100
+  Ashes of the Phoenix | 17 | -34%   | $57,800  | $28,900 | $28,900
+  Sulfur Reactor       |  4 | +10%   |  $4,000  |  $1,600 |  $2,400
+  TOTAL                              |$311,500  |$151,000 |$160,500
+
+THREE PnL SCENARIOS:
+- Conservative (trimmed v5 magnitudes):  ~$160,500
+- Bullish (full v3 magnitudes):          ~$214,000
+- Realistic 65-70% capture of v3-optimal: ~$139,000 - $150,000
+
+BENCHMARK CHECK:
+- Frankfurt (P3, 2nd global) made $126,751 on this round
+- Top P2 manual was ~$149k
+- Conservative-case expected ($160k) is ~83% of theoretical optimum if v3
+  magnitudes are right — well above the empirical 65-70% capture rate
+
+
+================================================================================
+NOTEBOOK STRUCTURE (manual-round-5.ipynb — 25 cells total)
+================================================================================
+
+  intro            (md)   - Problem setup, fee formula, optimum derivation
+  setup            (code) - imports, B, pnl() function
+  p1-md            (md)   - Plot 1 description
+  plot1            (code) - PnL vs v for r=30%
+  p2-md            (md)   - Plot 2 description
+  plot2            (code) - PnL curves family + peak locus
+  p3-md            (md)   - Plot 3 description (when does 100% justify?)
+  plot3            (code) - Wide-range peak locus + forced-100% line
+  est-md           (md)   - Estimation methodology
+  estimates        (code) - v1 assets dict with archetype priors
+  table            (code) - DataFrame with allocations + PnL
+  overlay          (code) - v1 assets on peak locus
+  calib-md         (md)   - P3 calibration intro
+  estimates-v2     (code) - v2 assets after P3 calibration
+  lagrange         (code) - Lagrangian sizing for v2
+  v3-md            (md)   - v3 priors after P2+P3 calibration
+  estimates-v3     (code) - v3 assets dict
+  lagrange-v3      (code) - Lagrangian shrink for v3 (binds)
+  overlay-v3       (code) - v3 assets on peak locus
+  v4-md            (md)   - Two-variant submission framework
+  submission       (code) - Variant A & B integer weights
+  v5-md            (md)   - Obsidian flip rationale
+  submission-v5    (code) - v5 with Obsidian as BUY +12%
+  final-md         (md)   - Final submitted orders intro
+  final            (code) - Submitted orders + PnL verification
+
+
+================================================================================
+KEY SOURCES REFERENCED
+================================================================================
+
+- TimoDiehm/imc-prosperity-3 (Frankfurt Hedgehogs, 2nd global)
+  https://github.com/TimoDiehm/imc-prosperity-3
+- chrispyroberts/imc-prosperity-3 (7th global / 1st USA)
+  https://github.com/chrispyroberts/imc-prosperity-3
+- gabsens/IMC-Prosperity-2-Manual (Round5.ipynb)
+  https://github.com/gabsens/IMC-Prosperity-2-Manual/blob/master/Round5.ipynb
+- jmerle/imc-prosperity-2 (9th place P2)
+  https://github.com/jmerle/imc-prosperity-2
+- David Teather P2 writeup
+  https://medium.com/@davidteather/imc-prosperity-2-b1c94b1ebba8
+- Martin Oravec P3 writeup
+  https://medium.com/@oravec.martin01/imc-prosperity-3-be859180f133
+- CarterT27/imc-prosperity-3 (Alpha Animals, 9th global)
+  https://github.com/CarterT27/imc-prosperity-3
+- Huzefa Mandviwala P4 (in progress)
+  https://medium.com/@mandviwalahuzefa53/how-i-qualified-for-imc-prosperity-4-finals-strategy-failures-and-everything-in-between-1d3ca7921bb7
+- Prosperity 4 official: https://prosperity.imc.com/
+
+
+================================================================================
+END OF TRANSCRIPT
+================================================================================
